@@ -105,5 +105,5 @@ If a preset is chosen, all other selections are ignored, and that preset's choic
 ### v0.0.6
 - Supports presets
 
-### v0.0.7
+### v1.0.0
 - Supports "protected" choices with a protectedChoices option - lock emoji + teal colour, can't be selected.
