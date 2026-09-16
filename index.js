@@ -64,7 +64,7 @@ export const chooseInteractive = async (
 
   const keys = Object.keys(enrichedChoices);
   const selected = new Set();
-  let cursor = 0;
+  let cursor = presets.length;
   let buffer = '';
   let error = '';
   let linesPrinted = 0;
