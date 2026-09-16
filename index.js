@@ -2,7 +2,7 @@ import readline from 'readline';
 import chalk from 'chalk';
 import { pathToFileURL } from 'url';
 
-export const chooseInteractive = async (
+const chooseInteractive = async (
   choices,
   {
     question,
@@ -295,6 +295,8 @@ export const chooseInteractive = async (
     render();
   });
 };
+
+export default chooseInteractive;
 
 // Demo, only runs when execu ted directly
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

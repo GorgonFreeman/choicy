@@ -2,21 +2,17 @@
 
 A terminal interface to facilitate choosing one or multiple options from a numbered list.
 
-Shape of the function:
 ```
-const chooseInteractive = (
-  choices,
-  {
-    question,
-    titleProp,
-    valueProp,
-    index0, // whether numbering starts at 0 or 1
-    oneChoice = false, // default to multiple choices
-    presets = [], // { key: 'x', choices: [...] }
-  } = {},
-) => {
-  ...
-}
+import choicy from 'choicy';
+
+const selected = await choicy(choices, {
+  question,
+  titleProp,
+  valueProp,
+  index0, // whether numbering starts at 0 or 1
+  oneChoice = false, // default to multiple choices
+  presets = [], // { key: 'x', choices: [...] }
+});
 ```
 
 The UI function should take an array of choices. 
