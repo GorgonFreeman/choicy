@@ -256,8 +256,6 @@ if (isMain) {
       ],
       {
         question: 'What would you like on your pizza?',
-        oneChoice: true,
-        index0: true,
         presets: [
           {
             key: 'hawaiian',
