@@ -113,7 +113,7 @@ export const chooseInteractive = async (
 
         let line = display;
         if (isProtected) {
-          line = chalk.hex('#008080')(line);
+          line = chalk.hex('#03fc98')(line);
         } else if (isSelected) {
           line = chalk.cyan(line);
         }
@@ -330,6 +330,9 @@ if (isMain) {
               'Ham',
             ],
           },
+        ],
+        protectedChoices: [
+          'Olives',
         ],
       },
     );
