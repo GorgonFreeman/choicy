@@ -30,6 +30,7 @@ export const chooseInteractive = async (
     question,
     titleProp,
     valueProp,
+    oneChoice = false,
   } = {},
 ) => {
 
@@ -86,7 +87,9 @@ export const chooseInteractive = async (
       lines.push(display);
     }
 
-    const hint = `Submit a number to toggle. Press Enter when done.`;
+    const hint = oneChoice
+      ? `Submit a number to choose.`
+      : `Submit a number to toggle. Press Enter when done.`;
     lines.push(hint);
 
     const inputPrompt = `Input: `;
@@ -106,6 +109,10 @@ export const chooseInteractive = async (
     if (selectedChoice === undefined) {
       console.error(chalk.red(`Invalid choice: ${ answer }`));
       continue;
+    }
+
+    if (oneChoice) {
+      return selectedChoice.value;
     }
 
     if (selected.has(answer)) {
