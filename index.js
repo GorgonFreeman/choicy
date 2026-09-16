@@ -1,4 +1,6 @@
-const chooseInteractive = (
+import { pathToFileURL } from 'url';
+
+export const chooseInteractive = (
   choices,
   {
     question,
@@ -12,17 +14,15 @@ const chooseInteractive = (
   return true;
 };
 
-module.exports = {
-  chooseInteractive,
-};
-
 // Demo, only runs when executed directly
-if (require.main === module) {
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isMain) {
   (async () => {
     const result = await chooseInteractive(
       [
-        'Tomato', 
-        'Pineapple', 
+        'Tomato',
+        'Pineapple',
         'Mushroom',
         'Cheese',
         'Pepperoni',
@@ -39,8 +39,8 @@ if (require.main === module) {
       {
         question: 'What would you like on your pizza?',
         presets: [
-          { 
-            key: 'hawaiian', 
+          {
+            key: 'hawaiian',
             choices: [
               'Tomato',
               'Cheese',
@@ -53,5 +53,8 @@ if (require.main === module) {
     );
     console.log('\nResult:', result);
     process.exit(0);
-  })();
+  })().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });
 }
