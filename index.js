@@ -2,28 +2,6 @@ import readline from 'readline';
 import chalk from 'chalk';
 import { pathToFileURL } from 'url';
 
-const ask = (prompt) => {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve, reject) => {
-    const onSigint = () => {
-      rl.close();
-      reject(new Error('cancelled'));
-    };
-
-    rl.on('SIGINT', onSigint);
-
-    rl.question(prompt, (answer) => {
-      rl.off('SIGINT', onSigint);
-      rl.close();
-      resolve(answer);
-    });
-  });
-};
-
 export const chooseInteractive = async (
   choices,
   {
@@ -45,7 +23,7 @@ export const chooseInteractive = async (
       || choice?.title 
       || choice?.name 
       || choice?.id 
-      || `${JSON.stringify(choice).slice(0, 30)}…`
+      || `${ JSON.stringify(choice).slice(0, 30) }…`
     ;
   };
 
@@ -67,69 +45,191 @@ export const chooseInteractive = async (
     startingIndex++;
   }
 
+  const keys = Object.keys(enrichedChoices);
   const selected = new Set();
+  let cursor = 0;
+  let buffer = '';
+  let error = '';
+  let linesPrinted = 0;
 
-  while (true) {
-    const lines = [];
+  return new Promise((resolve, reject) => {
 
-    if (question) {
-      lines.push(question);
-    }
-
-    for (const [key, choice] of Object.entries(enrichedChoices)) {
-      const { title, value } = choice;
-      const display = `[${ key }] ${ title }`;
-      const isSelected = selected.has(key);
-
-      if (isSelected) {
-        lines.push(chalk.cyan(display));
-        continue;
+    const render = () => {
+      if (linesPrinted > 0) {
+        readline.moveCursor(process.stdout, 0, -linesPrinted);
+        readline.cursorTo(process.stdout, 0);
+        readline.clearScreenDown(process.stdout);
       }
-      
-      lines.push(display);
-    }
 
-    const hint = oneChoice
-      ? `Submit a number to choose.`
-      : `Submit a number to toggle. Press Enter when done.`;
-    lines.push(hint);
+      const lines = [];
 
-    const inputPrompt = `Input: `;
-    lines.push(inputPrompt);
+      if (question) {
+        lines.push(question);
+      }
 
-    const answer = (await ask(lines.join('\n'))).trim();
+      keys.forEach((key, i) => {
+        const { title } = enrichedChoices[key];
+        const marker = i === cursor ? '>' : ' ';
+        const display = `${ marker } [${ key }] ${ title }`;
+        const isSelected = selected.has(key);
+        const isCursor = i === cursor;
 
-    // Submit selected choices if no input
-    if (answer === '') {
+        let line = display;
+        if (isSelected) {
+          line = chalk.cyan(line);
+        }
+        if (isCursor) {
+          line = chalk.bold(line);
+        }
 
+        lines.push(line);
+      });
+
+      const hint = oneChoice
+        ? `Type a number or use arrows + Space to choose.`
+        : `Type a number or use arrows + Space to toggle. Press Enter when done.`;
+      lines.push(hint);
+
+      if (error) {
+        lines.push(chalk.red(error));
+      }
+
+      lines.push(`Input: ${ buffer }`);
+
+      process.stdout.write(lines.join('\n') + '\n');
+      linesPrinted = lines.length;
+    };
+
+    const cleanup = () => {
+      process.stdin.removeListener('keypress', onKeypress);
+      if (process.stdin.isTTY) {
+        process.stdin.setRawMode(false);
+      }
+      process.stdin.pause();
+    };
+
+    const finish = (value) => {
+      cleanup();
+      resolve(value);
+    };
+
+    const submitSelected = () => {
       if (!skippable && selected.size === 0) {
-        console.error(chalk.red(`You must choose.`));
-        continue;
+        error = `You must choose.`;
+        buffer = '';
+        render();
+        return;
       }
 
-      return [...selected]
-        .sort((a, b) => a - b)
-        .map((i) => enrichedChoices[i].value);
-    }
+      finish(
+        [...selected]
+          .sort((a, b) => a - b)
+          .map((key) => enrichedChoices[key].value)
+      );
+    };
 
-    const selectedChoice = enrichedChoices?.[answer];
+    const chooseAtCursor = () => {
+      const key = keys[cursor];
+      const choice = enrichedChoices[key];
 
-    if (selectedChoice === undefined) {
-      console.error(chalk.red(`Invalid choice: ${ answer }`));
-      continue;
-    }
+      if (oneChoice) {
+        finish(choice.value);
+        return;
+      }
 
-    if (oneChoice) {
-      return selectedChoice.value;
-    }
+      if (selected.has(key)) {
+        selected.delete(key);
+      } else {
+        selected.add(key);
+      }
 
-    if (selected.has(answer)) {
-      selected.delete(answer);
-      continue;
+      render();
+    };
+
+    const submitBuffer = () => {
+      const answer = buffer.trim();
+
+      if (answer === '') {
+        submitSelected();
+        return;
+      }
+
+      const selectedChoice = enrichedChoices?.[answer];
+
+      if (selectedChoice === undefined) {
+        error = `Invalid choice: ${ answer }`;
+        buffer = '';
+        render();
+        return;
+      }
+
+      if (oneChoice) {
+        finish(selectedChoice.value);
+        return;
+      }
+
+      if (selected.has(answer)) {
+        selected.delete(answer);
+      } else {
+        selected.add(answer);
+      }
+
+      buffer = '';
+      error = '';
+      render();
+    };
+
+    const onKeypress = (str, key) => {
+      if (key?.ctrl && key.name === 'c') {
+        cleanup();
+        reject(new Error('cancelled'));
+        return;
+      }
+
+      if (key?.name === 'up') {
+        cursor = Math.max(0, cursor - 1);
+        render();
+        return;
+      }
+
+      if (key?.name === 'down') {
+        cursor = Math.min(keys.length - 1, cursor + 1);
+        render();
+        return;
+      }
+
+      if (key?.name === 'space') {
+        chooseAtCursor();
+        return;
+      }
+
+      if (key?.name === 'return') {
+        submitBuffer();
+        return;
+      }
+
+      if (key?.name === 'backspace') {
+        buffer = buffer.slice(0, -1);
+        render();
+        return;
+      }
+
+      if (str && /^[0-9]$/.test(str)) {
+        buffer += str;
+        error = '';
+        render();
+      }
+    };
+
+    readline.emitKeypressEvents(process.stdin);
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
     }
-  
-    selected.add(answer);
-  }
+    process.stdin.resume();
+    process.stdin.on('keypress', onKeypress);
+
+    render();
+  });
 };
 
 // Demo, only runs when execu ted directly
