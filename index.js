@@ -85,6 +85,7 @@ export const chooseInteractive = async (
       }
 
       if (presets.length > 0) {
+        lines.push('Presets:');
         presets.forEach((preset, i) => {
           const presetChoices = Array.isArray(preset.choices) ? preset.choices : [preset.choices];
           const titles = presetChoices.map((choice) => resolveTitle(choice)).join(', ');
@@ -97,7 +98,8 @@ export const chooseInteractive = async (
 
         lines.push('');
       }
-
+      
+      lines.push('Choices:');
       keys.forEach((key, i) => {
         const { title } = enrichedChoices[key];
         const cursorIndex = presets.length + i;
