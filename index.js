@@ -12,6 +12,7 @@ export const chooseInteractive = async (
     skippable = false,
     index0 = false,
     presets = [],
+    protectedChoices = [],
   } = {},
 ) => {
 
@@ -58,6 +59,7 @@ export const chooseInteractive = async (
     enrichedChoices[startingIndex] = {
       title, 
       value, 
+      isProtected: protectedChoices.includes(choice),
     };
     startingIndex++;
   }
@@ -101,15 +103,18 @@ export const chooseInteractive = async (
       
       lines.push('Choices:');
       keys.forEach((key, i) => {
-        const { title } = enrichedChoices[key];
+        const { title, isProtected } = enrichedChoices[key];
         const cursorIndex = presets.length + i;
         const marker = cursorIndex === cursor ? '>' : ' ';
-        const display = `${ marker } [${ key }] ${ title }`;
+        const label = isProtected ? `🔒 ${ title }` : title;
+        const display = `${ marker } [${ key }] ${ label }`;
         const isSelected = selected.has(key);
         const isCursor = cursorIndex === cursor;
 
         let line = display;
-        if (isSelected) {
+        if (isProtected) {
+          line = chalk.hex('#008080')(line);
+        } else if (isSelected) {
           line = chalk.cyan(line);
         }
         if (isCursor) {
@@ -171,6 +176,12 @@ export const chooseInteractive = async (
       const key = keys[cursor - presets.length];
       const choice = enrichedChoices[key];
 
+      if (choice.isProtected) {
+        error = `That choice is protected.`;
+        render();
+        return;
+      }
+
       if (oneChoice) {
         finish(choice.value);
         return;
@@ -204,6 +215,13 @@ export const chooseInteractive = async (
 
       if (selectedChoice === undefined) {
         error = `Invalid choice: ${ answer }`;
+        buffer = '';
+        render();
+        return;
+      }
+
+      if (selectedChoice.isProtected) {
+        error = `That choice is protected.`;
         buffer = '';
         render();
         return;
