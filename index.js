@@ -196,11 +196,59 @@ const chooseInteractive = async (
       render();
     };
 
+    const toggleChoiceKey = (key) => {
+      const choice = enrichedChoices?.[key];
+
+      if (choice === undefined) {
+        return `Invalid choice: ${ key }`;
+      }
+
+      if (choice.isProtected) {
+        return `That choice is protected: ${ key }`;
+      }
+
+      if (selected.has(key)) {
+        selected.delete(key);
+      } else {
+        selected.add(key);
+      }
+
+      return '';
+    };
+
     const submitBuffer = () => {
       const answer = buffer.trim();
 
       if (answer === '') {
         submitSelected();
+        return;
+      }
+
+      if (answer.includes(',')) {
+        if (oneChoice) {
+          error = `CSV is not supported when oneChoice is set.`;
+          buffer = '';
+          render();
+          return;
+        }
+
+        const parts = answer.split(',').map((part) => part.trim());
+        const errors = [];
+
+        for (const part of parts) {
+          if (part === '') {
+            continue;
+          }
+
+          const partError = toggleChoiceKey(part);
+          if (partError) {
+            errors.push(partError);
+          }
+        }
+
+        buffer = '';
+        error = errors.join('; ');
+        render();
         return;
       }
 
@@ -211,35 +259,29 @@ const chooseInteractive = async (
         return;
       }
 
-      const selectedChoice = enrichedChoices?.[answer];
-
-      if (selectedChoice === undefined) {
-        error = `Invalid choice: ${ answer }`;
-        buffer = '';
-        render();
-        return;
-      }
-
-      if (selectedChoice.isProtected) {
-        error = `That choice is protected.`;
-        buffer = '';
-        render();
-        return;
-      }
-
       if (oneChoice) {
-        finish(selectedChoice.value);
+        const choice = enrichedChoices?.[answer];
+
+        if (choice === undefined) {
+          error = `Invalid choice: ${ answer }`;
+          buffer = '';
+          render();
+          return;
+        }
+
+        if (choice.isProtected) {
+          error = `That choice is protected.`;
+          buffer = '';
+          render();
+          return;
+        }
+
+        finish(choice.value);
         return;
       }
 
-      if (selected.has(answer)) {
-        selected.delete(answer);
-      } else {
-        selected.add(answer);
-      }
-
+      error = toggleChoiceKey(answer);
       buffer = '';
-      error = '';
       render();
     };
 

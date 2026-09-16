@@ -109,4 +109,7 @@ If a preset is chosen, all other selections are ignored, and that preset's choic
 - Export chooseInteractive as default instead of its own function.
 
 ### v1.0.2
+- Support CSV of keys as input - if commas are present, treat as a CSV, and select all choices mentioned. Errors should be handled gracefully and other choices selected.
+
+### Future
 - Supports a "preselected" choice/group of choices. These should show in yellow, below the list of choices, in the same format as presets. If there are preselected choices, the cursor should start there, so the user can easily press space + enter to proceed.
