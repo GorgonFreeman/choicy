@@ -99,9 +99,9 @@ const chooseInteractive = async (
         });
 
         lines.push('');
+        lines.push('Choices:');
       }
-      
-      lines.push('Choices:');
+
       keys.forEach((key, i) => {
         const { title, isProtected } = enrichedChoices[key];
         const cursorIndex = presets.length + i;
