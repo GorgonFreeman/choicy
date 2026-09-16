@@ -24,7 +24,12 @@
   "author": "GorgonFreeman",
   "type": "commonjs",
   "main": "index.js",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "publish": "node _build_scripts/publish.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   }
 }
+
