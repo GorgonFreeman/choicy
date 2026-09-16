@@ -85,22 +85,26 @@ export const chooseInteractive = async (
       }
 
       if (presets.length > 0) {
-        lines.push('Presets:');
-        for (const preset of presets) {
+        presets.forEach((preset, i) => {
           const presetChoices = Array.isArray(preset.choices) ? preset.choices : [preset.choices];
           const titles = presetChoices.map((choice) => resolveTitle(choice)).join(', ');
-          lines.push(`[${ preset.key }] ${ titles }`);
-        }
+          const marker = i === cursor ? '>' : ' ';
+          const display = `${ marker } [${ preset.key }] ${ titles }`;
+          const isCursor = i === cursor;
+
+          lines.push(isCursor ? chalk.bold(display) : display);
+        });
 
         lines.push('');
       }
 
       keys.forEach((key, i) => {
         const { title } = enrichedChoices[key];
-        const marker = i === cursor ? '>' : ' ';
+        const cursorIndex = presets.length + i;
+        const marker = cursorIndex === cursor ? '>' : ' ';
         const display = `${ marker } [${ key }] ${ title }`;
         const isSelected = selected.has(key);
-        const isCursor = i === cursor;
+        const isCursor = cursorIndex === cursor;
 
         let line = display;
         if (isSelected) {
@@ -114,8 +118,8 @@ export const chooseInteractive = async (
       });
 
       const hint = oneChoice
-        ? `Type a number or use arrows + Space to choose.`
-        : `Type a number or use arrows + Space to toggle. Press Enter when done.`;
+        ? `Type a number/preset or use arrows + Space to choose.`
+        : `Type a number/preset or use arrows + Space to toggle. Press Enter when done.`;
       lines.push(hint);
 
       if (error) {
@@ -157,7 +161,12 @@ export const chooseInteractive = async (
     };
 
     const chooseAtCursor = () => {
-      const key = keys[cursor];
+      if (cursor < presets.length) {
+        finish(presets[cursor].choices);
+        return;
+      }
+
+      const key = keys[cursor - presets.length];
       const choice = enrichedChoices[key];
 
       if (oneChoice) {
@@ -228,7 +237,7 @@ export const chooseInteractive = async (
       }
 
       if (key?.name === 'down') {
-        cursor = Math.min(keys.length - 1, cursor + 1);
+        cursor = Math.min(presets.length + keys.length - 1, cursor + 1);
         render();
         return;
       }
