@@ -113,7 +113,7 @@ export const chooseInteractive = async (
 
         let line = display;
         if (isProtected) {
-          line = chalk.hex('#03fc98')(line);
+          line = chalk.hex('#03fc98')(line); // TODO: Consider dark grey styling
         } else if (isSelected) {
           line = chalk.cyan(line);
         }
