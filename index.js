@@ -34,14 +34,15 @@ export const chooseInteractive = async (
 ) => {
 
   const resolveTitle = (choice) => {
+    if (typeof choice === 'string') {
+      return choice;
+    }
+    
     return choice?.[titleProp] 
       || choice?.title 
       || choice?.name 
       || choice?.id 
-      || (typeof choice === 'string' 
-        ? choice 
-        : JSON.stringify(choice).slice(0, 30) + '…'
-      )
+      || `${JSON.stringify(choice).slice(0, 30)}…`
     ;
   };
 
