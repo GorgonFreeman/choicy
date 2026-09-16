@@ -103,3 +103,10 @@ If a preset is chosen, all other selections are ignored, and that preset's choic
 
 ### v1.0.0
 - Supports "protected" choices with a protectedChoices option - lock emoji + teal colour, can't be selected.
+
+### v1.0.1
+- Don't show "Choices" section title if no presets.
+- Export chooseInteractive as default instead of its own function.
+
+### v1.0.2
+- Supports a "preselected" choice/group of choices. These should show in yellow, below the list of choices, in the same format as presets. If there are preselected choices, the cursor should start there, so the user can easily press space + enter to proceed.
