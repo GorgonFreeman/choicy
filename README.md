@@ -80,3 +80,30 @@ A preset's `key` functions as both its identifier (what's typed to select it) an
 Preset keys should be validated as being strings to prevent conflicts with the numbered lists. Choices should be validated as an array if choosing multiple, or not-an-array if choosing single. (TODO: Consider what happens if we are choosing between arrays - currently, workaround with object wrappers)
 
 If a preset is chosen, all other selections are ignored, and that preset's choices go through as-is - it doesn't need to match entries in the original choices array. If no presets are supplied, this list isn't shown.
+
+## Development roadmap
+
+### v0.0.1
+- Takes only an array of strings, so no title or value logic
+- Only supports multiple choices
+- No keyboard navigation, typing only, no CSV support
+- Toggling uses chalk to change colour to cyan
+- As simple and minimal as possible
+
+### v0.0.2
+- Supports objects as choices, with titleProp and valueProp, and resolveTitle and resolveValue helpers
+
+### v0.0.3
+- Supports single choice (chooseOne) mode
+
+### v0.0.4
+- Supports index0
+
+### v0.0.5
+- Supports keyboard navigation
+
+### v0.0.6
+- Supports presets
+
+### v0.0.7
+- Supports "protected" choices with a protectedChoices option - lock emoji + teal colour, can't be selected.
