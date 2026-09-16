@@ -28,8 +28,41 @@ export const chooseInteractive = async (
   choices,
   {
     question,
+    titleProp,
+    valueProp,
   } = {},
 ) => {
+
+  const resolveTitle = (choice) => {
+    return choice?.[titleProp] 
+      || choice?.title 
+      || choice?.name 
+      || choice?.id 
+      || (typeof choice === 'string' 
+        ? choice 
+        : JSON.stringify(choice).slice(0, 30) + '…'
+      )
+    ;
+  };
+
+  const resolveValue = (choice) => {
+    return choice?.[valueProp] 
+      || choice 
+    ;
+  };
+
+  const enrichedChoices = {};
+  let startingIndex = 1;
+  for (const choice of choices) {
+    const title = resolveTitle(choice);
+    const value = resolveValue(choice);
+    enrichedChoices[startingIndex] = {
+      title, 
+      value, 
+    };
+    startingIndex++;
+  }
+
   const selected = new Set();
 
   while (true) {
@@ -39,18 +72,18 @@ export const chooseInteractive = async (
       lines.push(question);
     }
 
-    choices.forEach((choice, i) => {
-      const num = i + 1;
-      const display = `[${ num }] ${ choice }`;
-      const isSelected = selected.has(i);
+    for (const [key, choice] of Object.entries(enrichedChoices)) {
+      const { title, value } = choice;
+      const display = `[${ key }] ${ title }`;
+      const isSelected = selected.has(key);
 
       if (isSelected) {
         lines.push(chalk.cyan(display));
-        return;
+        continue;
       }
       
       lines.push(display);
-    });
+    }
 
     const hint = `Submit a number to toggle. Press Enter when done.`;
     lines.push(hint);
@@ -64,23 +97,22 @@ export const chooseInteractive = async (
     if (answer === '') {
       return [...selected]
         .sort((a, b) => a - b)
-        .map((i) => choices[i]);
+        .map((i) => enrichedChoices[i].value);
     }
 
-    const choiceIndex = parseInt(answer, 10) - 1;
-    const chosenChoice = choices[choiceIndex];
+    const selectedChoice = enrichedChoices?.[answer];
 
-    if (chosenChoice === undefined) {
+    if (selectedChoice === undefined) {
       console.error(chalk.red(`Invalid choice: ${ answer }`));
       continue;
     }
 
-    if (selected.has(choiceIndex)) {
-      selected.delete(choiceIndex);
-      return;
+    if (selected.has(answer)) {
+      selected.delete(answer);
+      continue;
     }
   
-    selected.add(choiceIndex);
+    selected.add(answer);
   }
 };
 
