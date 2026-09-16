@@ -11,8 +11,25 @@ export const chooseInteractive = async (
     oneChoice = false,
     skippable = false,
     index0 = false,
+    presets = [],
   } = {},
 ) => {
+
+  for (const preset of presets) {
+    if (typeof preset.key !== 'string') {
+      throw new Error(`Preset key must be a string: ${ JSON.stringify(preset.key) }`);
+    }
+
+    const isArray = Array.isArray(preset.choices);
+
+    if (oneChoice && isArray) {
+      throw new Error(`Preset "${ preset.key }" choices must not be an array when oneChoice is set`);
+    }
+
+    if (!oneChoice && !isArray) {
+      throw new Error(`Preset "${ preset.key }" choices must be an array`);
+    }
+  }
 
   const resolveTitle = (choice) => {
     if (typeof choice === 'string') {
@@ -23,7 +40,7 @@ export const chooseInteractive = async (
       || choice?.title 
       || choice?.name 
       || choice?.id 
-      || `${ JSON.stringify(choice).slice(0, 30) }…`
+      || `${JSON.stringify(choice).slice(0, 30)}…`
     ;
   };
 
@@ -65,6 +82,17 @@ export const chooseInteractive = async (
 
       if (question) {
         lines.push(question);
+      }
+
+      if (presets.length > 0) {
+        lines.push('Presets:');
+        for (const preset of presets) {
+          const presetChoices = Array.isArray(preset.choices) ? preset.choices : [preset.choices];
+          const titles = presetChoices.map((choice) => resolveTitle(choice)).join(', ');
+          lines.push(`[${ preset.key }] ${ titles }`);
+        }
+
+        lines.push('');
       }
 
       keys.forEach((key, i) => {
@@ -154,6 +182,13 @@ export const chooseInteractive = async (
         return;
       }
 
+      const preset = presets.find((preset) => preset.key === answer);
+
+      if (preset) {
+        finish(preset.choices);
+        return;
+      }
+
       const selectedChoice = enrichedChoices?.[answer];
 
       if (selectedChoice === undefined) {
@@ -214,7 +249,7 @@ export const chooseInteractive = async (
         return;
       }
 
-      if (str && /^[0-9]$/.test(str)) {
+      if (str && /^[\x20-\x7e]$/.test(str)) {
         buffer += str;
         error = '';
         render();
