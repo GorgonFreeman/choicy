@@ -32,6 +32,7 @@ export const chooseInteractive = async (
     valueProp,
     oneChoice = false,
     skippable = false,
+    index0 = false,
   } = {},
 ) => {
 
@@ -55,7 +56,7 @@ export const chooseInteractive = async (
   };
 
   const enrichedChoices = {};
-  let startingIndex = 1;
+  let startingIndex = index0 ? 0 : 1;
   for (const choice of choices) {
     const title = resolveTitle(choice);
     const value = resolveValue(choice);
@@ -156,6 +157,7 @@ if (isMain) {
       {
         question: 'What would you like on your pizza?',
         oneChoice: true,
+        index0: true,
         presets: [
           {
             key: 'hawaiian',
