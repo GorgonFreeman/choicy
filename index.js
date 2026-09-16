@@ -31,6 +31,7 @@ export const chooseInteractive = async (
     titleProp,
     valueProp,
     oneChoice = false,
+    skippable = false,
   } = {},
 ) => {
 
@@ -99,6 +100,12 @@ export const chooseInteractive = async (
 
     // Submit selected choices if no input
     if (answer === '') {
+
+      if (!skippable && selected.size === 0) {
+        console.error(chalk.red(`You must choose.`));
+        continue;
+      }
+
       return [...selected]
         .sort((a, b) => a - b)
         .map((i) => enrichedChoices[i].value);
@@ -148,6 +155,7 @@ if (isMain) {
       ],
       {
         question: 'What would you like on your pizza?',
+        oneChoice: true,
         presets: [
           {
             key: 'hawaiian',
