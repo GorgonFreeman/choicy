@@ -14,7 +14,6 @@ const chooseInteractive = async (
     presets = [],
     protectedChoices = [],
     alternateScreen = true,
-    scroll = false,
   } = {},
 ) => {
 
@@ -95,35 +94,57 @@ const chooseInteractive = async (
 
   return new Promise((resolve, reject) => {
 
-    const getChoiceViewport = () => {
-      const rows = process.stdout.rows || 24;
+    const getChromeReserved = () => {
       let reserved = 2; // hint + input
       if (question) reserved += 1;
       if (error) reserved += 1;
       if (presets.length > 0) {
         reserved += 1 + presets.length + 1 + 1; // Presets: + items + blank + Choices:
       }
-      return Math.max(1, rows - reserved);
+      return reserved;
     };
 
-    const ensureCursorVisible = () => {
-      if (!scroll) {
-        return;
+    const getScrollLayout = () => {
+      const rows = process.stdout.rows || 24;
+      const available = Math.max(1, rows - getChromeReserved());
+
+      if (keys.length <= available) {
+        scrollOffset = 0;
+        return {
+          maxChoices: keys.length,
+          hasMoreAbove: false,
+          hasMoreBelow: false,
+        };
       }
 
-      const maxVisible = getChoiceViewport();
-      scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, keys.length - maxVisible)));
+      let maxChoices = Math.max(1, available - 2);
 
-      if (cursor < presets.length) {
-        return;
-      }
+      const clampOffset = () => {
+        scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, keys.length - maxChoices)));
 
-      const choiceIndex = cursor - presets.length;
-      if (choiceIndex < scrollOffset) {
-        scrollOffset = choiceIndex;
-      } else if (choiceIndex >= scrollOffset + maxVisible) {
-        scrollOffset = choiceIndex - maxVisible + 1;
-      }
+        if (cursor >= presets.length) {
+          const choiceIndex = cursor - presets.length;
+          if (choiceIndex < scrollOffset) {
+            scrollOffset = choiceIndex;
+          } else if (choiceIndex >= scrollOffset + maxChoices) {
+            scrollOffset = choiceIndex - maxChoices + 1;
+          }
+        }
+      };
+
+      clampOffset();
+      let hasMoreAbove = scrollOffset > 0;
+      let hasMoreBelow = scrollOffset + maxChoices < keys.length;
+      maxChoices = Math.max(1, available - (hasMoreAbove ? 1 : 0) - (hasMoreBelow ? 1 : 0));
+      clampOffset();
+      hasMoreAbove = scrollOffset > 0;
+      hasMoreBelow = scrollOffset + maxChoices < keys.length;
+
+      return {
+        maxChoices,
+        hasMoreAbove,
+        hasMoreBelow,
+      };
     };
 
     const render = () => {
@@ -133,10 +154,9 @@ const chooseInteractive = async (
         readline.clearScreenDown(process.stdout);
       }
 
-      ensureCursorVisible();
-      const visibleKeys = scroll
-        ? keys.slice(scrollOffset, scrollOffset + getChoiceViewport())
-        : keys;
+      const { maxChoices, hasMoreAbove, hasMoreBelow } = getScrollLayout();
+      const visibleKeys = keys.slice(scrollOffset, scrollOffset + maxChoices);
+      const ellipsis = chalk.yellow('...');
 
       const lines = [];
 
@@ -160,8 +180,12 @@ const chooseInteractive = async (
         lines.push('Choices:');
       }
 
+      if (hasMoreAbove) {
+        lines.push(ellipsis);
+      }
+
       visibleKeys.forEach((key, i) => {
-        const choiceIndex = scroll ? scrollOffset + i : i;
+        const choiceIndex = scrollOffset + i;
         const { title, isProtected } = enrichedChoices[key];
         const cursorIndex = presets.length + choiceIndex;
         const marker = cursorIndex === cursor ? '>' : ' ';
@@ -182,6 +206,10 @@ const chooseInteractive = async (
 
         lines.push(line);
       });
+
+      if (hasMoreBelow) {
+        lines.push(ellipsis);
+      }
 
       const hint = oneChoice
         ? `Type a number/preset or use arrows + Space to choose.`
