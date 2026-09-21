@@ -118,5 +118,9 @@ If a preset is chosen, all other selections are ignored, and that preset's choic
 ### v1.1.0
 - Dual package: ESM via `import` and CommonJS via `require` (`index.cjs` loads the ESM entry).
 
+### v1.1.2
+- Alternate screen stops log history noise
+- Internal scroll on option values
+
 ### Future
 - Supports a "preselected" choice/group of choices. These should show in yellow, below the list of choices, in the same format as presets. If there are preselected choices, the cursor should start there, so the user can easily press space + enter to proceed.
