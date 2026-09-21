@@ -122,5 +122,8 @@ If a preset is chosen, all other selections are ignored, and that preset's choic
 - Alternate screen stops log history noise
 - Internal scroll on option values
 
+### v1.1.3
+- Internal scroll is optional via `scroll` (default false)
+
 ### Future
 - Supports a "preselected" choice/group of choices. These should show in yellow, below the list of choices, in the same format as presets. If there are preselected choices, the cursor should start there, so the user can easily press space + enter to proceed.

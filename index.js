@@ -14,6 +14,7 @@ const chooseInteractive = async (
     presets = [],
     protectedChoices = [],
     alternateScreen = true,
+    scroll = false,
   } = {},
 ) => {
 
@@ -106,6 +107,10 @@ const chooseInteractive = async (
     };
 
     const ensureCursorVisible = () => {
+      if (!scroll) {
+        return;
+      }
+
       const maxVisible = getChoiceViewport();
       scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, keys.length - maxVisible)));
 
@@ -129,8 +134,9 @@ const chooseInteractive = async (
       }
 
       ensureCursorVisible();
-      const maxVisible = getChoiceViewport();
-      const visibleKeys = keys.slice(scrollOffset, scrollOffset + maxVisible);
+      const visibleKeys = scroll
+        ? keys.slice(scrollOffset, scrollOffset + getChoiceViewport())
+        : keys;
 
       const lines = [];
 
@@ -155,7 +161,7 @@ const chooseInteractive = async (
       }
 
       visibleKeys.forEach((key, i) => {
-        const choiceIndex = scrollOffset + i;
+        const choiceIndex = scroll ? scrollOffset + i : i;
         const { title, isProtected } = enrichedChoices[key];
         const cursorIndex = presets.length + choiceIndex;
         const marker = cursorIndex === cursor ? '>' : ' ';
