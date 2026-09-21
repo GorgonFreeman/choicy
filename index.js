@@ -13,6 +13,7 @@ const chooseInteractive = async (
     index0 = false,
     presets = [],
     protectedChoices = [],
+    alternateScreen = true,
   } = {},
 ) => {
 
@@ -70,6 +71,25 @@ const chooseInteractive = async (
   let buffer = '';
   let error = '';
   let linesPrinted = 0;
+  let alternateScreenActive = false;
+
+  const enterAlternateScreen = () => {
+    if (!alternateScreen || !process.stdout.isTTY || alternateScreenActive) {
+      return;
+    }
+    process.stdout.write('\x1b[?1049h\x1b[H');
+    alternateScreenActive = true;
+    linesPrinted = 0;
+  };
+
+  const leaveAlternateScreen = () => {
+    if (!alternateScreenActive) {
+      return;
+    }
+    process.stdout.write('\x1b[?1049l');
+    alternateScreenActive = false;
+    linesPrinted = 0;
+  };
 
   return new Promise((resolve, reject) => {
 
@@ -145,6 +165,7 @@ const chooseInteractive = async (
         process.stdin.setRawMode(false);
       }
       process.stdin.pause();
+      leaveAlternateScreen();
     };
 
     const finish = (value) => {
@@ -334,6 +355,7 @@ const chooseInteractive = async (
     process.stdin.resume();
     process.stdin.on('keypress', onKeypress);
 
+    enterAlternateScreen();
     render();
   });
 };
