@@ -68,6 +68,7 @@ const chooseInteractive = async (
   const keys = Object.keys(enrichedChoices);
   const selected = new Set();
   let cursor = presets.length;
+  let scrollOffset = 0;
   let buffer = '';
   let error = '';
   let linesPrinted = 0;
@@ -93,12 +94,43 @@ const chooseInteractive = async (
 
   return new Promise((resolve, reject) => {
 
+    const getChoiceViewport = () => {
+      const rows = process.stdout.rows || 24;
+      let reserved = 2; // hint + input
+      if (question) reserved += 1;
+      if (error) reserved += 1;
+      if (presets.length > 0) {
+        reserved += 1 + presets.length + 1 + 1; // Presets: + items + blank + Choices:
+      }
+      return Math.max(1, rows - reserved);
+    };
+
+    const ensureCursorVisible = () => {
+      const maxVisible = getChoiceViewport();
+      scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, keys.length - maxVisible)));
+
+      if (cursor < presets.length) {
+        return;
+      }
+
+      const choiceIndex = cursor - presets.length;
+      if (choiceIndex < scrollOffset) {
+        scrollOffset = choiceIndex;
+      } else if (choiceIndex >= scrollOffset + maxVisible) {
+        scrollOffset = choiceIndex - maxVisible + 1;
+      }
+    };
+
     const render = () => {
       if (linesPrinted > 0) {
         readline.moveCursor(process.stdout, 0, -linesPrinted);
         readline.cursorTo(process.stdout, 0);
         readline.clearScreenDown(process.stdout);
       }
+
+      ensureCursorVisible();
+      const maxVisible = getChoiceViewport();
+      const visibleKeys = keys.slice(scrollOffset, scrollOffset + maxVisible);
 
       const lines = [];
 
@@ -122,9 +154,10 @@ const chooseInteractive = async (
         lines.push('Choices:');
       }
 
-      keys.forEach((key, i) => {
+      visibleKeys.forEach((key, i) => {
+        const choiceIndex = scrollOffset + i;
         const { title, isProtected } = enrichedChoices[key];
-        const cursorIndex = presets.length + i;
+        const cursorIndex = presets.length + choiceIndex;
         const marker = cursorIndex === cursor ? '>' : ' ';
         const label = isProtected ? `🔒 ${ title }` : title;
         const display = `${ marker } [${ key }] ${ label }`;
