@@ -74,6 +74,25 @@ const chooseInteractive = async (
   let linesPrinted = 0;
   let alternateScreenActive = false;
 
+  const stripAnsi = (text) => String(text).replace(/\x1b\[[0-9;]*m/g, '');
+
+  const terminalRows = () => process.stdout.rows || 24;
+  const terminalColumns = () => Math.max(1, process.stdout.columns || 80);
+
+  // Count how many terminal rows a printed line will occupy (wrap-aware).
+  const visualRows = (text) => {
+    const cols = terminalColumns();
+    return stripAnsi(text).split('\n').reduce((sum, line) => {
+      return sum + Math.max(1, Math.ceil(Math.max(line.length, 1) / cols));
+    }, 0);
+  };
+
+  const choicePlainLabel = (key) => {
+    const { title, isProtected } = enrichedChoices[key];
+    const label = isProtected ? `🔒 ${ title }` : title;
+    return `  [${ key }] ${ label }`;
+  };
+
   const enterAlternateScreen = () => {
     if (!alternateScreen || !process.stdout.isTTY || alternateScreenActive) {
       return;
@@ -94,21 +113,37 @@ const chooseInteractive = async (
 
   return new Promise((resolve, reject) => {
 
-    const getChromeReserved = () => {
-      let reserved = 2; // hint + input
-      if (question) reserved += 1;
-      if (error) reserved += 1;
+    const hintText = () => oneChoice
+      ? `Type a number/preset or use arrows + Space to choose.`
+      : `Type a number/preset or use arrows + Space to toggle. Press Enter when done.`;
+
+    const getChromeRows = () => {
+      let reserved = visualRows(hintText()) + visualRows(`Input: ${ buffer }`);
+      if (question) reserved += visualRows(question);
+      if (error) reserved += visualRows(error);
       if (presets.length > 0) {
-        reserved += 1 + presets.length + 1 + 1; // Presets: + items + blank + Choices:
+        reserved += visualRows('Presets:');
+        presets.forEach((preset) => {
+          const presetChoices = Array.isArray(preset.choices) ? preset.choices : [preset.choices];
+          const titles = presetChoices.map((choice) => resolveTitle(choice)).join(', ');
+          reserved += visualRows(`  [${ preset.key }] ${ titles }`);
+        });
+        reserved += visualRows('') + visualRows('Choices:');
       }
       return reserved;
     };
 
-    const getScrollLayout = () => {
-      const rows = process.stdout.rows || 24;
-      const available = Math.max(1, rows - getChromeReserved());
+    const choiceRowCounts = () => keys.map((key) => visualRows(choicePlainLabel(key)));
 
-      if (keys.length <= available) {
+    const getScrollLayout = () => {
+      const rows = terminalRows();
+      const chromeRows = getChromeRows();
+      const available = Math.max(1, rows - chromeRows);
+      const rowCounts = choiceRowCounts();
+      const totalChoiceRows = rowCounts.reduce((sum, n) => sum + n, 0);
+      const ellipsisRows = visualRows('...');
+
+      if (totalChoiceRows <= available) {
         scrollOffset = 0;
         return {
           maxChoices: keys.length,
@@ -117,33 +152,87 @@ const chooseInteractive = async (
         };
       }
 
-      let maxChoices = Math.max(1, available - 2);
+      const cursorChoiceIndex = cursor >= presets.length
+        ? cursor - presets.length
+        : 0;
 
-      const clampOffset = () => {
-        scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, keys.length - maxChoices)));
+      // Keep the cursor row in view, then pack as many neighbors as fit.
+      scrollOffset = Math.min(scrollOffset, cursorChoiceIndex);
+      if (cursorChoiceIndex < scrollOffset) {
+        scrollOffset = cursorChoiceIndex;
+      }
 
-        if (cursor >= presets.length) {
-          const choiceIndex = cursor - presets.length;
-          if (choiceIndex < scrollOffset) {
-            scrollOffset = choiceIndex;
-          } else if (choiceIndex >= scrollOffset + maxChoices) {
-            scrollOffset = choiceIndex - maxChoices + 1;
-          }
+      const maxChoicesFitting = (start, budget, forceAbove, forceBelow) => {
+        const reserved = (forceAbove ? ellipsisRows : 0) + (forceBelow ? ellipsisRows : 0);
+        let budgetLeft = budget - reserved;
+        if (budgetLeft < 1) {
+          budgetLeft = Math.max(1, budget - ellipsisRows);
         }
+
+        let count = 0;
+        let used = 0;
+        for (let i = start; i < keys.length; i++) {
+          const next = rowCounts[i];
+          if (count > 0 && used + next > budgetLeft) {
+            break;
+          }
+          if (count === 0 && next > budgetLeft) {
+            // Always show at least the cursor choice, even if it wraps heavily.
+            return 1;
+          }
+          used += next;
+          count += 1;
+        }
+        return Math.max(1, count);
       };
 
-      clampOffset();
-      let hasMoreAbove = scrollOffset > 0;
-      let hasMoreBelow = scrollOffset + maxChoices < keys.length;
-      maxChoices = Math.max(1, available - (hasMoreAbove ? 1 : 0) - (hasMoreBelow ? 1 : 0));
-      clampOffset();
-      hasMoreAbove = scrollOffset > 0;
-      hasMoreBelow = scrollOffset + maxChoices < keys.length;
+      // Grow/shrink window until cursor fits and ellipsis flags are stable.
+      for (let pass = 0; pass < 3; pass++) {
+        let hasMoreAbove = scrollOffset > 0;
+        let maxChoices = maxChoicesFitting(scrollOffset, available, hasMoreAbove, true);
+        let hasMoreBelow = scrollOffset + maxChoices < keys.length;
+        maxChoices = maxChoicesFitting(scrollOffset, available, hasMoreAbove, hasMoreBelow);
+        hasMoreBelow = scrollOffset + maxChoices < keys.length;
 
+        if (cursorChoiceIndex >= scrollOffset + maxChoices) {
+          // Scroll down so cursor is the last visible item, then re-pack.
+          let used = 0;
+          let count = 0;
+          const belowEllipsis = cursorChoiceIndex < keys.length - 1 ? ellipsisRows : 0;
+          const aboveBudget = available - belowEllipsis;
+          for (let i = cursorChoiceIndex; i >= 0; i--) {
+            const next = rowCounts[i];
+            if (count > 0 && used + next + ellipsisRows > aboveBudget && i > 0) {
+              break;
+            }
+            if (count > 0 && used + next > aboveBudget) {
+              break;
+            }
+            used += next;
+            count += 1;
+            scrollOffset = i;
+          }
+          continue;
+        }
+
+        if (cursorChoiceIndex < scrollOffset) {
+          scrollOffset = cursorChoiceIndex;
+          continue;
+        }
+
+        return {
+          maxChoices,
+          hasMoreAbove,
+          hasMoreBelow,
+        };
+      }
+
+      const hasMoreAbove = scrollOffset > 0;
+      const maxChoices = maxChoicesFitting(scrollOffset, available, hasMoreAbove, true);
       return {
         maxChoices,
         hasMoreAbove,
-        hasMoreBelow,
+        hasMoreBelow: scrollOffset + maxChoices < keys.length,
       };
     };
 
@@ -211,10 +300,7 @@ const chooseInteractive = async (
         lines.push(ellipsis);
       }
 
-      const hint = oneChoice
-        ? `Type a number/preset or use arrows + Space to choose.`
-        : `Type a number/preset or use arrows + Space to toggle. Press Enter when done.`;
-      lines.push(hint);
+      lines.push(hintText());
 
       if (error) {
         lines.push(chalk.red(error));
@@ -223,7 +309,7 @@ const chooseInteractive = async (
       lines.push(`Input: ${ buffer }`);
 
       process.stdout.write(lines.join('\n') + '\n');
-      linesPrinted = lines.length;
+      linesPrinted = lines.reduce((sum, line) => sum + visualRows(line), 0);
     };
 
     const cleanup = () => {
