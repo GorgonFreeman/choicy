@@ -76,21 +76,21 @@ const chooseInteractive = async (
 
   const stripAnsi = (text) => String(text).replace(/\x1b\[[0-9;]*m/g, '');
 
-  const terminalRows = () => process.stdout.rows || 24;
   const terminalColumns = () => Math.max(1, process.stdout.columns || 80);
 
-  // Count how many terminal rows a printed line will occupy (wrap-aware).
-  const visualRows = (text) => {
-    const cols = terminalColumns();
-    return stripAnsi(text).split('\n').reduce((sum, line) => {
-      return sum + Math.max(1, Math.ceil(Math.max(line.length, 1) / cols));
-    }, 0);
-  };
-
-  const choicePlainLabel = (key) => {
-    const { title, isProtected } = enrichedChoices[key];
-    const label = isProtected ? `🔒 ${ title }` : title;
-    return `  [${ key }] ${ label }`;
+  // Keep every printed row to a single terminal line (no wrap).
+  const clipToTerminal = (text) => {
+    const max = Math.max(1, terminalColumns() - 1);
+    return String(text).split('\n').map((line) => {
+      const plain = stripAnsi(line);
+      if (plain.length <= max) {
+        return plain;
+      }
+      if (max === 1) {
+        return '…';
+      }
+      return `${ plain.slice(0, max - 1) }…`;
+    }).join('\n');
   };
 
   const enterAlternateScreen = () => {
@@ -113,37 +113,21 @@ const chooseInteractive = async (
 
   return new Promise((resolve, reject) => {
 
-    const hintText = () => oneChoice
-      ? `Type a number/preset or use arrows + Space to choose.`
-      : `Type a number/preset or use arrows + Space to toggle. Press Enter when done.`;
-
-    const getChromeRows = () => {
-      let reserved = visualRows(hintText()) + visualRows(`Input: ${ buffer }`);
-      if (question) reserved += visualRows(question);
-      if (error) reserved += visualRows(error);
+    const getChromeReserved = () => {
+      let reserved = 2; // hint + input
+      if (question) reserved += String(question).split('\n').length;
+      if (error) reserved += 1;
       if (presets.length > 0) {
-        reserved += visualRows('Presets:');
-        presets.forEach((preset) => {
-          const presetChoices = Array.isArray(preset.choices) ? preset.choices : [preset.choices];
-          const titles = presetChoices.map((choice) => resolveTitle(choice)).join(', ');
-          reserved += visualRows(`  [${ preset.key }] ${ titles }`);
-        });
-        reserved += visualRows('') + visualRows('Choices:');
+        reserved += 1 + presets.length + 1 + 1; // Presets: + items + blank + Choices:
       }
       return reserved;
     };
 
-    const choiceRowCounts = () => keys.map((key) => visualRows(choicePlainLabel(key)));
-
     const getScrollLayout = () => {
-      const rows = terminalRows();
-      const chromeRows = getChromeRows();
-      const available = Math.max(1, rows - chromeRows);
-      const rowCounts = choiceRowCounts();
-      const totalChoiceRows = rowCounts.reduce((sum, n) => sum + n, 0);
-      const ellipsisRows = visualRows('...');
+      const rows = process.stdout.rows || 24;
+      const available = Math.max(1, rows - getChromeReserved());
 
-      if (totalChoiceRows <= available) {
+      if (keys.length <= available) {
         scrollOffset = 0;
         return {
           maxChoices: keys.length,
@@ -152,87 +136,33 @@ const chooseInteractive = async (
         };
       }
 
-      const cursorChoiceIndex = cursor >= presets.length
-        ? cursor - presets.length
-        : 0;
+      let maxChoices = Math.max(1, available - 2);
 
-      // Keep the cursor row in view, then pack as many neighbors as fit.
-      scrollOffset = Math.min(scrollOffset, cursorChoiceIndex);
-      if (cursorChoiceIndex < scrollOffset) {
-        scrollOffset = cursorChoiceIndex;
-      }
+      const clampOffset = () => {
+        scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, keys.length - maxChoices)));
 
-      const maxChoicesFitting = (start, budget, forceAbove, forceBelow) => {
-        const reserved = (forceAbove ? ellipsisRows : 0) + (forceBelow ? ellipsisRows : 0);
-        let budgetLeft = budget - reserved;
-        if (budgetLeft < 1) {
-          budgetLeft = Math.max(1, budget - ellipsisRows);
-        }
-
-        let count = 0;
-        let used = 0;
-        for (let i = start; i < keys.length; i++) {
-          const next = rowCounts[i];
-          if (count > 0 && used + next > budgetLeft) {
-            break;
+        if (cursor >= presets.length) {
+          const choiceIndex = cursor - presets.length;
+          if (choiceIndex < scrollOffset) {
+            scrollOffset = choiceIndex;
+          } else if (choiceIndex >= scrollOffset + maxChoices) {
+            scrollOffset = choiceIndex - maxChoices + 1;
           }
-          if (count === 0 && next > budgetLeft) {
-            // Always show at least the cursor choice, even if it wraps heavily.
-            return 1;
-          }
-          used += next;
-          count += 1;
         }
-        return Math.max(1, count);
       };
 
-      // Grow/shrink window until cursor fits and ellipsis flags are stable.
-      for (let pass = 0; pass < 3; pass++) {
-        let hasMoreAbove = scrollOffset > 0;
-        let maxChoices = maxChoicesFitting(scrollOffset, available, hasMoreAbove, true);
-        let hasMoreBelow = scrollOffset + maxChoices < keys.length;
-        maxChoices = maxChoicesFitting(scrollOffset, available, hasMoreAbove, hasMoreBelow);
-        hasMoreBelow = scrollOffset + maxChoices < keys.length;
+      clampOffset();
+      let hasMoreAbove = scrollOffset > 0;
+      let hasMoreBelow = scrollOffset + maxChoices < keys.length;
+      maxChoices = Math.max(1, available - (hasMoreAbove ? 1 : 0) - (hasMoreBelow ? 1 : 0));
+      clampOffset();
+      hasMoreAbove = scrollOffset > 0;
+      hasMoreBelow = scrollOffset + maxChoices < keys.length;
 
-        if (cursorChoiceIndex >= scrollOffset + maxChoices) {
-          // Scroll down so cursor is the last visible item, then re-pack.
-          let used = 0;
-          let count = 0;
-          const belowEllipsis = cursorChoiceIndex < keys.length - 1 ? ellipsisRows : 0;
-          const aboveBudget = available - belowEllipsis;
-          for (let i = cursorChoiceIndex; i >= 0; i--) {
-            const next = rowCounts[i];
-            if (count > 0 && used + next + ellipsisRows > aboveBudget && i > 0) {
-              break;
-            }
-            if (count > 0 && used + next > aboveBudget) {
-              break;
-            }
-            used += next;
-            count += 1;
-            scrollOffset = i;
-          }
-          continue;
-        }
-
-        if (cursorChoiceIndex < scrollOffset) {
-          scrollOffset = cursorChoiceIndex;
-          continue;
-        }
-
-        return {
-          maxChoices,
-          hasMoreAbove,
-          hasMoreBelow,
-        };
-      }
-
-      const hasMoreAbove = scrollOffset > 0;
-      const maxChoices = maxChoicesFitting(scrollOffset, available, hasMoreAbove, true);
       return {
         maxChoices,
         hasMoreAbove,
-        hasMoreBelow: scrollOffset + maxChoices < keys.length,
+        hasMoreBelow,
       };
     };
 
@@ -250,7 +180,7 @@ const chooseInteractive = async (
       const lines = [];
 
       if (question) {
-        lines.push(question);
+        clipToTerminal(question).split('\n').forEach((line) => lines.push(line));
       }
 
       if (presets.length > 0) {
@@ -259,7 +189,7 @@ const chooseInteractive = async (
           const presetChoices = Array.isArray(preset.choices) ? preset.choices : [preset.choices];
           const titles = presetChoices.map((choice) => resolveTitle(choice)).join(', ');
           const marker = i === cursor ? '>' : ' ';
-          const display = `${ marker } [${ preset.key }] ${ titles }`;
+          const display = clipToTerminal(`${ marker } [${ preset.key }] ${ titles }`);
           const isCursor = i === cursor;
 
           lines.push(isCursor ? chalk.bold(display) : display);
@@ -279,7 +209,7 @@ const chooseInteractive = async (
         const cursorIndex = presets.length + choiceIndex;
         const marker = cursorIndex === cursor ? '>' : ' ';
         const label = isProtected ? `🔒 ${ title }` : title;
-        const display = `${ marker } [${ key }] ${ label }`;
+        const display = clipToTerminal(`${ marker } [${ key }] ${ label }`);
         const isSelected = selected.has(key);
         const isCursor = cursorIndex === cursor;
 
@@ -300,16 +230,19 @@ const chooseInteractive = async (
         lines.push(ellipsis);
       }
 
-      lines.push(hintText());
+      const hint = oneChoice
+        ? `Type a number/preset or use arrows + Space to choose.`
+        : `Type a number/preset or use arrows + Space to toggle. Press Enter when done.`;
+      lines.push(clipToTerminal(hint));
 
       if (error) {
-        lines.push(chalk.red(error));
+        lines.push(chalk.red(clipToTerminal(error)));
       }
 
-      lines.push(`Input: ${ buffer }`);
+      lines.push(clipToTerminal(`Input: ${ buffer }`));
 
       process.stdout.write(lines.join('\n') + '\n');
-      linesPrinted = lines.reduce((sum, line) => sum + visualRows(line), 0);
+      linesPrinted = lines.length;
     };
 
     const cleanup = () => {
